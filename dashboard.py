@@ -6,18 +6,18 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import seaborn as sns
 
-# Create main window
+# --- Window setup ---
 root = tb.Window(themename="darkly")
 root.title("Teacher Dashboard - Attendance & Marks Visualizer")
-root.geometry("1250x700")
+root.geometry("1400x750")
 
-# Global variables
+# Variables
 df = None
 selected_analysis = tk.StringVar(value="Select")
 selected_column1 = tk.StringVar(value="Select")
 selected_column2 = tk.StringVar(value="Select")
 
-# --- Upload CSV File ---
+# --- Upload Function ---
 def upload_file():
     global df
     file_path = filedialog.askopenfilename(filetypes=[("CSV Files", "*.csv")])
@@ -25,11 +25,10 @@ def upload_file():
         df = pd.read_csv(file_path)
         status_label.config(text=f"Loaded: {file_path.split('/')[-1]}")
         update_table()
-        columns = list(df.columns)
-        column_selector1['values'] = ["Select"] + columns
-        column_selector2['values'] = ["Select"] + columns
+        update_column_selectors()
+        generate_insights()
 
-# --- Update Table (Compact) ---
+# --- Update Table (compact preview) ---
 def update_table():
     for i in tree.get_children():
         tree.delete(i)
@@ -38,14 +37,73 @@ def update_table():
         for col in df.columns:
             tree.heading(col, text=col)
             tree.column(col, width=120, anchor="center")
-        # Show limited rows to save space
         for _, row in df.head(10).iterrows():
             tree.insert("", "end", values=list(row))
-    else:
-        tree["columns"] = []
-        tree.insert("", "end", values=["No Data Loaded"])
 
-# --- Generate Visualization ---
+# --- Update Dropdowns ---
+def update_column_selectors():
+    if df is not None:
+        columns = ["Select"] + list(df.columns)
+        column_selector1["values"] = columns
+        column_selector2["values"] = columns
+
+# --- Generate Insights ---
+def generate_insights():
+    if df is None:
+        return
+
+    insights_text.delete(1.0, tk.END)
+    insights_text.insert(tk.END, "📊 SMART INSIGHTS\n\n")
+
+    try:
+        # General Info
+        insights_text.insert(tk.END, f"Total Records: {len(df)}\n")
+        insights_text.insert(tk.END, f"Total Columns: {len(df.columns)}\n")
+
+        # Detect numeric columns
+        numeric_cols = df.select_dtypes(include="number").columns.tolist()
+        if numeric_cols:
+            insights_text.insert(tk.END, f"\nNumeric Columns: {', '.join(numeric_cols)}\n")
+
+            # Basic stats
+            summary = df[numeric_cols].describe().T
+            top_mark_col = summary['mean'].idxmax()
+            low_mark_col = summary['mean'].idxmin()
+
+            insights_text.insert(tk.END, f"\nHighest Avg: {top_mark_col} ({summary.loc[top_mark_col, 'mean']:.2f})\n")
+            insights_text.insert(tk.END, f"Lowest Avg: {low_mark_col} ({summary.loc[low_mark_col, 'mean']:.2f})\n")
+
+            # Missing data
+            missing = df.isnull().sum().sum()
+            if missing > 0:
+                insights_text.insert(tk.END, f"\n⚠️ Missing Values: {missing}\n")
+
+            # Correlation check
+            if len(numeric_cols) >= 2:
+                corr = df[numeric_cols].corr().abs()
+                strongest = corr.unstack().sort_values(ascending=False)
+                first_pair = strongest[strongest < 1].idxmax()
+                corr_val = corr.loc[first_pair[0], first_pair[1]]
+                insights_text.insert(tk.END, f"\n🔗 Strongest Correlation: {first_pair[0]} ↔ {first_pair[1]} ({corr_val:.2f})\n")
+
+        # Attendance specific
+        attendance_cols = [col for col in df.columns if "attend" in col.lower()]
+        if attendance_cols:
+            col = attendance_cols[0]
+            avg_att = df[col].mean()
+            insights_text.insert(tk.END, f"\n🧮 Average Attendance: {avg_att:.2f}%\n")
+
+        # Marks specific
+        marks_cols = [col for col in df.columns if "mark" in col.lower() or "score" in col.lower()]
+        if marks_cols:
+            col = marks_cols[0]
+            top_student = df.loc[df[col].idxmax(), df.columns[0]]
+            insights_text.insert(tk.END, f"🏅 Top Scorer: {top_student} ({df[col].max()})\n")
+
+    except Exception as e:
+        insights_text.insert(tk.END, f"\nError generating insights: {e}")
+
+# --- Generate Graphs ---
 def generate_analysis():
     if df is None:
         status_label.config(text="Please upload a CSV file first!")
@@ -53,12 +111,11 @@ def generate_analysis():
 
     analysis_type = selected_analysis.get()
     col1, col2 = selected_column1.get(), selected_column2.get()
+    plt.clf()
 
     if analysis_type == "Select":
         status_label.config(text="Please select an analysis type.")
         return
-
-    plt.clf()
 
     try:
         if analysis_type == "Frequency Analysis" and col1 != "Select":
@@ -70,35 +127,34 @@ def generate_analysis():
         elif analysis_type == "Correlation Matrix":
             corr = df.corr(numeric_only=True)
             sns.heatmap(corr, annot=True, cmap="coolwarm", fmt=".2f")
-            plt.title("Correlation Matrix of Numerical Columns")
+            plt.title("Correlation Matrix")
 
         elif analysis_type == "Marks Summary":
             summary = df.describe(numeric_only=True).T[['mean', 'std', 'min', 'max']]
             summary.plot(kind="bar", figsize=(8, 5), legend=True)
-            plt.title("Marks Summary (Mean, Std, Min, Max)")
+            plt.title("Marks Summary")
 
         elif analysis_type == "Custom Comparison" and col1 != "Select" and col2 != "Select":
             sns.scatterplot(x=df[col1], y=df[col2], s=60, color="#0dcaf0", edgecolor="white")
-            plt.title(f"{col1} vs {col2} Comparison")
+            plt.title(f"{col1} vs {col2}")
             plt.xlabel(col1)
             plt.ylabel(col2)
 
         elif analysis_type == "Trend Analysis" and col1 != "Select":
             df[col1].value_counts().sort_index().plot(kind="line", marker='o')
-            plt.title(f"Trend of {col1} Over Time")
-            plt.xlabel("Index")
-            plt.ylabel("Count")
+            plt.title(f"Trend of {col1}")
 
         else:
-            status_label.config(text="Please select valid columns for analysis.")
+            status_label.config(text="Select valid options.")
             return
 
         display_plot()
+        generate_insights()
 
     except Exception as e:
         status_label.config(text=f"Error: {e}")
 
-# --- Display Plot in Tkinter Frame ---
+# --- Display Plot ---
 def display_plot():
     for widget in graph_frame.winfo_children():
         widget.destroy()
@@ -114,11 +170,11 @@ title_label.pack(pady=10)
 upload_btn = tb.Button(root, text="Upload CSV File", bootstyle="success", command=upload_file)
 upload_btn.pack(pady=5)
 
-# --- Main Frame Layout ---
+# --- Main layout ---
 main_frame = tb.Frame(root)
 main_frame.pack(fill='both', expand=True, padx=10, pady=10)
 
-# Left Control Panel
+# Left Controls
 control_frame = tb.LabelFrame(main_frame, text="⚙️ Controls", padding=10)
 control_frame.pack(side='left', fill='y', padx=10, pady=5)
 
@@ -142,14 +198,21 @@ generate_btn.pack(pady=10)
 status_label = tb.Label(control_frame, text="No file loaded", bootstyle="secondary")
 status_label.pack(pady=10)
 
-# Data Preview (Compact)
+# Center Table
 table_frame = tb.LabelFrame(main_frame, text="📋 Data Preview (Top 10 Rows)", padding=10)
 table_frame.pack(side='left', fill='both', expand=True, padx=10)
 
 tree = ttk.Treeview(table_frame, show='headings')
 tree.pack(fill='both', expand=True)
 
-# Graph Display
+# Right Smart Insights
+insights_frame = tb.LabelFrame(main_frame, text="💡 Smart Insights", padding=10)
+insights_frame.pack(side='right', fill='y', padx=10, pady=5)
+
+insights_text = tk.Text(insights_frame, height=25, wrap='word', bg="#2a2a2a", fg="white", relief="flat")
+insights_text.pack(fill='both', expand=True)
+
+# Graph Section
 graph_frame = tb.LabelFrame(root, text="📈 Data Visualization", padding=10)
 graph_frame.pack(fill='both', expand=True, padx=10, pady=10)
 
