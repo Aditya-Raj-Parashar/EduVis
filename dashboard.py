@@ -1,291 +1,130 @@
+import tkinter as tk
+from tkinter import filedialog, ttk
 import ttkbootstrap as tb
-from ttkbootstrap.constants import *
-from tkinter import filedialog, messagebox
 import pandas as pd
-from matplotlib.figure import Figure
+import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import seaborn as sns
 
+# Create window
+# cyborg, darkly, solar, morph, journal
+root = tb.Window(themename="darkly")
+root.title("Teacher Dashboard - Attendance & Marks Visualizer")
+root.geometry("1200x700")
 
-class TeacherDashboard(tb.Window):
-    def __init__(self):
-        super().__init__(themename="superhero")  # cyborg, darkly, solar, morph, journal
+# Variables
+df = None
+selected_analysis = tk.StringVar()
+selected_column1 = tk.StringVar()
+selected_column2 = tk.StringVar()
 
-        self.title("Teacher Dashboard - Attendance & Marks Visualizer")
-        self.geometry("1000x650")
-        self.resizable(True, True)
+# --- Upload Function ---
+def upload_file():
+    global df
+    file_path = filedialog.askopenfilename(filetypes=[("CSV Files", "*.csv")])
+    if file_path:
+        df = pd.read_csv(file_path)
+        update_table()
+        column_selector1['values'] = list(df.columns)
+        column_selector2['values'] = list(df.columns)
+        status_label.config(text=f"Loaded: {file_path.split('/')[-1]}")
 
-        # Initialize dataframe
-        self.df = None
+# --- Update Table ---
+def update_table():
+    for i in tree.get_children():
+        tree.delete(i)
+    for index, row in df.head(20).iterrows():
+        tree.insert("", "end", values=list(row))
 
-        # Create UI components
-        self.create_menu()
-        self.create_widgets()
-        self.create_graph_placeholder()
+# --- Generate Visualization ---
+def generate_analysis():
+    if df is None:
+        status_label.config(text="Please upload a CSV file first!")
+        return
 
-        # ------------------- VISUALIZATION FUNCTIONS -------------------
-    def clear_canvas(self):
-        for widget in self.canvas_frame.winfo_children():
-            widget.destroy()
+    plt.clf()
+    analysis_type = selected_analysis.get()
 
-    def update_secondary_options(self, event=None):
-        """Update column selection dropdowns when visualization type changes"""
-        if self.df is None:
-            messagebox.showinfo("No Data", "Please upload a CSV file first!")
-            return
+    if analysis_type == "Frequency Analysis":
+        col = selected_column1.get()
+        if col:
+            freq = df[col].value_counts().head(10)
+            sns.barplot(x=freq.index, y=freq.values)
+            plt.title(f"Frequency of {col}")
+            plt.xticks(rotation=45)
 
-        numeric_cols = list(self.df.select_dtypes(include='number').columns)
-        if self.visual_type.get() == "Correlation":
-            self.col1_menu.config(values=numeric_cols)
-            self.col2_menu.config(values=numeric_cols, state="readonly")
-        else:
-            self.col1_menu.config(values=numeric_cols)
-            self.col2_menu.set("N/A")
-            self.col2_menu.config(state="disabled")
+    elif analysis_type == "Correlation Matrix":
+        corr = df.corr(numeric_only=True)
+        sns.heatmap(corr, annot=True, cmap="coolwarm")
+        plt.title("Correlation Matrix")
 
-    def generate_graph(self):
-        if self.df is None:
-            messagebox.showwarning("No Data", "Please upload a CSV file first.")
-            return
+    elif analysis_type == "Marks Summary":
+        df.describe().T[['mean', 'std', 'min', 'max']].plot(kind='bar')
+        plt.title("Marks Summary")
 
-        vis_type = self.visual_type.get()
-        self.clear_canvas()
+    elif analysis_type == "Custom Comparison":
+        col1, col2 = selected_column1.get(), selected_column2.get()
+        if col1 and col2:
+            sns.scatterplot(x=df[col1], y=df[col2])
+            plt.title(f"Scatter Plot: {col1} vs {col2}")
 
-        fig = Figure(figsize=(6, 3), dpi=100)
-        ax = fig.add_subplot(111)
+    display_plot()
 
-        try:
-            if vis_type == "Marks Distribution":
-                numeric_cols = self.df.select_dtypes(include='number').columns
-                if len(numeric_cols) > 0:
-                    self.df[numeric_cols].mean().plot(kind='bar', ax=ax, color='orange')
-                    ax.set_title("Average Marks per Subject")
-                    ax.set_ylabel("Average Marks")
-                else:
-                    ax.text(0.5, 0.5, "No numeric data found", ha="center", va="center")
+# --- Display Plot in Canvas ---
+def display_plot():
+    for widget in graph_frame.winfo_children():
+        widget.destroy()
+    fig = plt.gcf()
+    canvas = FigureCanvasTkAgg(fig, master=graph_frame)
+    canvas.draw()
+    canvas.get_tk_widget().pack(fill='both', expand=True)
 
-            elif vis_type == "Attendance Trend":
-                numeric_cols = self.df.select_dtypes(include='number').columns
-                if len(numeric_cols) > 1:
-                    self.df[numeric_cols].mean().plot(kind='line', marker='o', ax=ax)
-                    ax.set_title("Attendance Trend Over Time")
-                    ax.set_ylabel("Average Attendance")
-                else:
-                    ax.text(0.5, 0.5, "Not enough numeric columns", ha="center", va="center")
+# --- UI Layout ---
+title_label = tb.Label(root, text="📘 Teacher Dashboard", font=("Helvetica", 18, "bold"))
+title_label.pack(pady=10)
 
-            elif vis_type == "Correlation":
-                col1 = self.col1.get()
-                col2 = self.col2.get()
+upload_btn = tb.Button(root, text="Upload CSV File", bootstyle="success", command=upload_file)
+upload_btn.pack(pady=5)
 
-                if col1 in self.df.columns and col2 in self.df.columns:
-                    ax.scatter(self.df[col1], self.df[col2], color='cyan')
-                    ax.set_xlabel(col1)
-                    ax.set_ylabel(col2)
-                    ax.set_title(f"Correlation between {col1} and {col2}")
-                else:
-                    ax.text(0.5, 0.5, "Select two valid numeric columns", ha="center", va="center")
+main_frame = tb.Frame(root)
+main_frame.pack(fill='both', expand=True, padx=10, pady=10)
 
-            else:
-                ax.text(0.5, 0.5, "Please select a visualization type", ha="center", va="center")
+# Left Panel - Controls
+control_frame = tb.LabelFrame(main_frame, text="⚙️ Controls")
+control_frame.pack(side='left', fill='y', padx=5, pady=5)
 
-        except Exception as e:
-            ax.text(0.5, 0.5, f"Error: {e}", ha="center", va="center")
+ttk.Label(control_frame, text="Select Analysis:").pack(pady=5)
+analysis_menu = ttk.Combobox(control_frame, textvariable=selected_analysis, values=[
+    "Frequency Analysis", "Correlation Matrix", "Marks Summary", "Custom Comparison"
+])
+analysis_menu.pack(pady=5)
 
-        canvas = FigureCanvasTkAgg(fig, master=self.canvas_frame)
-        canvas.draw()
-        canvas.get_tk_widget().pack(fill=BOTH, expand=True)
+ttk.Label(control_frame, text="Select Column 1:").pack(pady=5)
+column_selector1 = ttk.Combobox(control_frame, textvariable=selected_column1)
+column_selector1.pack(pady=5)
 
-    def clear_canvas(self):
-        for widget in self.canvas_frame.winfo_children():
-            widget.destroy()
+ttk.Label(control_frame, text="Select Column 2 (optional):").pack(pady=5)
+column_selector2 = ttk.Combobox(control_frame, textvariable=selected_column2)
+column_selector2.pack(pady=5)
 
-    def show_marks_distribution(self):
-        if self.df is None:
-            messagebox.showwarning("No Data", "Please upload a CSV first.")
-            return
+generate_btn = tb.Button(control_frame, text="Generate Graph", bootstyle="info", command=generate_analysis)
+generate_btn.pack(pady=10)
 
-        self.clear_canvas()
-        fig = Figure(figsize=(6, 3), dpi=100)
-        ax = fig.add_subplot(111)
+status_label = tb.Label(control_frame, text="No file loaded", bootstyle="secondary")
+status_label.pack(pady=10)
 
-        # pick numeric columns only (like marks)
-        numeric_cols = self.df.select_dtypes(include='number').columns
-        if len(numeric_cols) == 0:
-            ax.text(0.5, 0.5, "No numeric data found", ha="center", va="center")
-        else:
-            self.df[numeric_cols].mean().plot(kind='bar', ax=ax, color='skyblue')
-            ax.set_title("Average Marks per Subject")
-            ax.set_ylabel("Average Marks")
+# Right Panel - Table
+table_frame = tb.LabelFrame(main_frame, text="📋 Data Preview")
+table_frame.pack(side='left', fill='both', expand=True, padx=5, pady=5)
 
-        canvas = FigureCanvasTkAgg(fig, master=self.canvas_frame)
-        canvas.draw()
-        canvas.get_tk_widget().pack(fill=BOTH, expand=True)
+columns = ("A", "B", "C", "D", "E")
+tree = ttk.Treeview(table_frame, columns=columns, show='headings')
+tree.pack(fill='both', expand=True)
 
-    def show_attendance_trend(self):
-        if self.df is None:
-            messagebox.showwarning("No Data", "Please upload a CSV first.")
-            return
+# Bottom Frame - Graph Display
+graph_frame = tb.LabelFrame(root, text="📈 Data Visualization")
+graph_frame.pack(fill='both', expand=True, padx=10, pady=10)
 
-        self.clear_canvas()
-        fig = Figure(figsize=(6, 3), dpi=100)
-        ax = fig.add_subplot(111)
+tb.Label(graph_frame, text="Graphs will appear here", bootstyle="secondary").pack(pady=20)
 
-        # Assuming months columns are attendance numbers
-        numeric_cols = self.df.select_dtypes(include='number').columns
-        if len(numeric_cols) > 1:
-            self.df[numeric_cols].mean().plot(kind='line', marker='o', ax=ax)
-            ax.set_title("Attendance Trend Over Time")
-            ax.set_xlabel("Months")
-            ax.set_ylabel("Average Attendance")
-        else:
-            ax.text(0.5, 0.5, "No attendance-like data found", ha="center", va="center")
-
-        canvas = FigureCanvasTkAgg(fig, master=self.canvas_frame)
-        canvas.draw()
-        canvas.get_tk_widget().pack(fill=BOTH, expand=True)
-
-    def show_correlation(self):
-        if self.df is None:
-            messagebox.showwarning("No Data", "Please upload a CSV first.")
-            return
-
-        self.clear_canvas()
-        fig = Figure(figsize=(6, 3), dpi=100)
-        ax = fig.add_subplot(111)
-
-        numeric_cols = self.df.select_dtypes(include='number').columns
-        if len(numeric_cols) > 1:
-            corr = self.df[numeric_cols].corr()
-            cax = ax.matshow(corr, cmap="coolwarm")
-            fig.colorbar(cax)
-            ax.set_xticks(range(len(corr.columns)))
-            ax.set_xticklabels(corr.columns, rotation=90)
-            ax.set_yticks(range(len(corr.columns)))
-            ax.set_yticklabels(corr.columns)
-            ax.set_title("Correlation Heatmap", pad=15)
-        else:
-            ax.text(0.5, 0.5, "Not enough numeric data", ha="center", va="center")
-
-        canvas = FigureCanvasTkAgg(fig, master=self.canvas_frame)
-        canvas.draw()
-        canvas.get_tk_widget().pack(fill=BOTH, expand=True)
-
-
-    # ------------------- MENU BAR -------------------
-    def create_menu(self):
-        menubar = tb.Menu(self)
-        file_menu = tb.Menu(menubar, tearoff=0)
-        file_menu.add_command(label="Open CSV", command=self.load_csv)
-        file_menu.add_separator()
-        file_menu.add_command(label="Exit", command=self.quit)
-        menubar.add_cascade(label="File", menu=file_menu)
-        self.config(menu=menubar)
-
-    # ------------------- MAIN LAYOUT -------------------
-    def create_widgets(self):
-        # Title
-        title_label = tb.Label(
-            self, text="📊 Teacher Dashboard", font=("Segoe UI", 20, "bold"), bootstyle="inverse-dark"
-        )
-        title_label.pack(pady=10)
-
-        # Upload Button
-        upload_btn = tb.Button(
-            self,
-            text="Upload CSV File",
-            bootstyle="success-outline",
-            command=self.load_csv,
-            width=20
-        )
-        upload_btn.pack(pady=5)
-
-        # Table Frame
-        self.table_frame = tb.Frame(self)
-        self.table_frame.pack(pady=10, fill=BOTH, expand=True)
-
-    # ------------------- LOAD CSV -------------------
-    def load_csv(self):
-        file_path = filedialog.askopenfilename(
-            title="Select CSV File",
-            filetypes=[("CSV Files", "*.csv")]
-        )
-        if not file_path:
-            return
-
-        try:
-            self.df = pd.read_csv(file_path)
-            self.display_table(self.df)
-            messagebox.showinfo("Success", "CSV file loaded successfully!")
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to load CSV file:\n{e}")
-
-    # ------------------- DISPLAY DATA IN TREEVIEW -------------------
-    def display_table(self, df):
-        # Clear previous table
-        for widget in self.table_frame.winfo_children():
-            widget.destroy()
-
-        # Create Treeview
-        cols = list(df.columns)
-        tree = tb.Treeview(self.table_frame, columns=cols, show="headings", bootstyle="dark")
-
-        # Define columns
-        for col in cols:
-            tree.heading(col, text=col)
-            tree.column(col, width=100, anchor=CENTER)
-
-        # Insert rows
-        for _, row in df.iterrows():
-            tree.insert("", END, values=list(row))
-
-        # Add scrollbar
-        scrollbar = tb.Scrollbar(self.table_frame, orient=VERTICAL, command=tree.yview)
-        tree.configure(yscrollcommand=scrollbar.set)
-        scrollbar.pack(side=RIGHT, fill=Y)
-        tree.pack(fill=BOTH, expand=True)
-
-    # ------------------- ADVANCED GRAPH SECTION -------------------
-    def create_graph_placeholder(self):
-        self.graph_frame = tb.Labelframe(
-            self,
-            text="📈 Data Visualization",
-            bootstyle="info",
-            padding=10
-        )
-        self.graph_frame.pack(pady=10, fill=BOTH, expand=True)
-
-        # Control Panel Frame
-        control_frame = tb.Frame(self.graph_frame)
-        control_frame.pack(pady=5, fill=X)
-
-        # Visualization type dropdown
-        tb.Label(control_frame, text="Select Visualization:", bootstyle="inverse-info").pack(side=LEFT, padx=5)
-        self.visual_type = tb.StringVar(value="Select Option")
-        vis_options = ["Marks Distribution", "Attendance Trend", "Correlation"]
-        vis_menu = tb.Combobox(control_frame, textvariable=self.visual_type, values=vis_options, state="readonly", width=20)
-        vis_menu.pack(side=LEFT, padx=5)
-        vis_menu.bind("<<ComboboxSelected>>", self.update_secondary_options)
-
-        # Secondary selection (columns)
-        tb.Label(control_frame, text="Select Columns:", bootstyle="inverse-info").pack(side=LEFT, padx=5)
-        self.col1 = tb.StringVar(value="Select Column 1")
-        self.col2 = tb.StringVar(value="Select Column 2")
-
-        self.col1_menu = tb.Combobox(control_frame, textvariable=self.col1, values=[], state="readonly", width=20)
-        self.col1_menu.pack(side=LEFT, padx=5)
-        self.col2_menu = tb.Combobox(control_frame, textvariable=self.col2, values=[], state="readonly", width=20)
-        self.col2_menu.pack(side=LEFT, padx=5)
-
-        # Generate Button
-        tb.Button(control_frame, text="Generate Graph", bootstyle="success-outline", command=self.generate_graph).pack(side=LEFT, padx=10)
-
-        # Canvas area
-        self.canvas_frame = tb.Frame(self.graph_frame)
-        self.canvas_frame.pack(fill=BOTH, expand=True)
-
-
-
-
-# ------------------- RUN APP -------------------
-if __name__ == "__main__":
-    app = TeacherDashboard()
-    app.mainloop()
+root.mainloop()
