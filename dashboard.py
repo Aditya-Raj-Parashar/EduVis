@@ -1,10 +1,71 @@
 import tkinter as tk
-from tkinter import filedialog, ttk
+from tkinter import filedialog, ttk, messagebox
 import ttkbootstrap as tb
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import seaborn as sns
+
+# --- Export Graph as Image ---
+def export_graph():
+    try:
+        file_path = filedialog.asksaveasfilename(defaultextension=".png", filetypes=[("PNG Image", "*.png"), ("JPEG Image", "*.jpg")])
+        if file_path:
+            plt.savefig(file_path)
+            messagebox.showinfo("Export Success", f"Graph saved to {file_path}")
+    except Exception as e:
+        messagebox.showerror("Export Error", str(e))
+
+# --- Filter/Search Data ---
+def filter_table():
+    query = filter_entry.get().lower()
+    for i in tree.get_children():
+        tree.delete(i)
+    if df is not None and query != '':
+        filtered = df[df.apply(lambda row: row.astype(str).str.lower().str.contains(query).any(), axis=1)]
+        for _, row in filtered.head(10).iterrows():
+            tree.insert("", "end", values=list(row))
+
+# --- Missing Data Visualization ---
+def plot_missing_data():
+    if df is not None:
+        plt.clf()
+        missing = df.isnull().sum()
+        missing = missing[missing > 0]
+        if not missing.empty:
+            missing.plot(kind='bar', color='orange')
+            plt.title('Missing Values per Column')
+            plt.ylabel('Count')
+            plt.tight_layout()
+            display_plot()
+        else:
+            status_label.config(text="No missing data to display.")
+
+# --- Download Insights ---
+def export_insights():
+    text = insights_text.get(1.0, tk.END)
+    file_path = filedialog.asksaveasfilename(defaultextension=".txt", filetypes=[("Text File", "*.txt")])
+    if file_path:
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.write(text)
+        messagebox.showinfo("Export Success", f"Insights saved to {file_path}")
+
+
+
+def drop_duplicates():
+    global df
+    if df is not None:
+        before = len(df)
+        df = df.drop_duplicates()
+        df = df.dropna()
+        after = len(df)
+        update_table()
+        generate_insights()
+        messagebox.showinfo(
+            "Rows Removed",
+            f"All duplicate and null rows have been dropped.\nRows before: {before}\nRows after: {after}"
+        )
+
 
 # --- Window setup ---
 root = tb.Window(themename="darkly")
@@ -17,17 +78,6 @@ selected_analysis = tk.StringVar(value="Select")
 selected_column1 = tk.StringVar(value="Select")
 selected_column2 = tk.StringVar(value="Select")
 
-# --- Upload Function ---
-def upload_file():
-    global df
-    file_path = filedialog.askopenfilename(filetypes=[("CSV Files", "*.csv")])
-    if file_path:
-        df = pd.read_csv(file_path)
-        status_label.config(text=f"Loaded: {file_path.split('/')[-1]}")
-        update_table()
-        update_column_selectors()
-        generate_insights()
-
 # --- Update Table (compact preview) ---
 def update_table():
     for i in tree.get_children():
@@ -37,8 +87,54 @@ def update_table():
         for col in df.columns:
             tree.heading(col, text=col)
             tree.column(col, width=120, anchor="center")
-        for _, row in df.head(10).iterrows():
+        for _, row in df.iterrows():
             tree.insert("", "end", values=list(row))
+
+def show_insights_popup():
+    popup = tk.Toplevel(root)
+    popup.title("💡 Smart Insights")
+    popup.geometry("500x600")
+    popup.transient(root)
+    popup.grab_set()
+    text = tk.Text(popup, height=30, wrap='word', bg="#2a2a2a", fg="white", relief="flat")
+    text.pack(fill='both', expand=True, padx=10, pady=10)
+    # Fill with current insights
+    text.insert(tk.END, insights_text.get(1.0, tk.END))
+    text.config(state='disabled')
+    btn = tb.Button(popup, text="Close", bootstyle="danger", command=popup.destroy)
+    btn.pack(pady=10)
+
+# --- Upload Function ---
+def upload_file():
+    global df
+    file_path = filedialog.askopenfilename(
+        filetypes=[
+            ("CSV Files", "*.csv"),
+            ("Excel Files", "*.xlsx;*.xls"),
+            ("JSON Files", "*.json"),
+            ("All Files", "*.*")
+        ]
+    )
+    if file_path:
+        try:
+            if file_path.endswith(('.xlsx', '.xls')):
+                df = pd.read_excel(file_path)
+            elif file_path.endswith('.json'):
+                df = pd.read_json(file_path)
+            else:
+                df = pd.read_csv(file_path)
+            status_label.config(text=f"Loaded: {file_path.split('/')[-1]}")
+            selected_analysis.set("Select")  # Reset analysis type
+            selected_column1.set("Select")   # Reset columns
+            selected_column2.set("Select")
+            update_table()
+            update_column_selectors()
+            generate_insights()
+            # Hide the insights_frame and show popup
+            insights_frame.pack_forget()
+            show_insights_popup()
+        except Exception as e:
+            messagebox.showerror("File Load Error", f"Could not load file:\n{e}")
 
 # --- Update Dropdowns ---
 def update_column_selectors():
@@ -59,6 +155,35 @@ def generate_insights():
         # General Info
         insights_text.insert(tk.END, f"Total Records: {len(df)}\n")
         insights_text.insert(tk.END, f"Total Columns: {len(df.columns)}\n")
+
+        # Data types
+        dtypes = df.dtypes.astype(str)
+        insights_text.insert(tk.END, f"\nColumn Data Types:\n")
+        for col, dtype in dtypes.items():
+            insights_text.insert(tk.END, f"- {col}: {dtype}\n")
+
+        # Columns with missing values
+        missing_cols = df.columns[df.isnull().any()].tolist()
+        if missing_cols:
+            insights_text.insert(tk.END, f"\nColumns with Missing Values: {', '.join(missing_cols)}\n")
+            for col in missing_cols:
+                count = df[col].isnull().sum()
+                insights_text.insert(tk.END, f"  - {col}: {count} missing\n")
+        else:
+            insights_text.insert(tk.END, "\nNo columns with missing values.\n")
+
+        # Columns with duplicates
+        duplicate_cols = []
+        for col in df.columns:
+            if df[col].duplicated().any():
+                duplicate_cols.append(col)
+        if duplicate_cols:
+            insights_text.insert(tk.END, f"\nColumns with Duplicates: {', '.join(duplicate_cols)}\n")
+            for col in duplicate_cols:
+                count = df[col].duplicated().sum()
+                insights_text.insert(tk.END, f"  - {col}: {count} duplicates\n")
+        else:
+            insights_text.insert(tk.END, "\nNo columns with duplicate values.\n")
 
         # Detect numeric columns
         numeric_cols = df.select_dtypes(include="number").columns.tolist()
@@ -120,7 +245,7 @@ def generate_analysis():
     try:
         if analysis_type == "Frequency Analysis" and col1 != "Select":
             freq = df[col1].value_counts().head(10)
-            sns.barplot(x=freq.index, y=freq.values, palette="crest")
+            sns.barplot(x=freq.index, y=freq.values, hue=freq.index, palette="crest", legend=False)
             plt.title(f"Top 10 Frequency of {col1}")
             plt.xticks(rotation=45)
 
@@ -130,7 +255,7 @@ def generate_analysis():
             plt.title("Correlation Matrix")
 
         elif analysis_type == "Marks Summary":
-            summary = df.describe(numeric_only=True).T[['mean', 'std', 'min', 'max']]
+            summary = df.describe().T[['mean', 'std', 'min', 'max']]
             summary.plot(kind="bar", figsize=(8, 5), legend=True)
             plt.title("Marks Summary")
 
@@ -144,15 +269,46 @@ def generate_analysis():
             df[col1].value_counts().sort_index().plot(kind="line", marker='o')
             plt.title(f"Trend of {col1}")
 
+        elif analysis_type == "distribution" and col1 != "Select" :
+            sns.histplot(df[col1].dropna(),kde = True, color="#1ad5fa", edgecolor="white")
+            plt.title(f"Distribution of {col1}")
+            plt.xlabel(col1)
+            plt.ylabel("Frequency")
+
+        elif analysis_type == "boxplot - outliers" and col1 != "Select" :
+            sns.boxplot(x=df[col1].dropna(), color="#12e343", edgecolor="black")
+            plt.title(f"boxplot of {col1}")
+            plt.xlabel(col1)
+
+        elif analysis_type == "Top N Categories" and col1 != "Select":
+            n=10
+            top_n = df[col1].value_counts().head(n)
+            sns.barplot(x=top_n.values, y=top_n.index, palette="crest")
+            plt.title(f"Top {n} Categories in {col1}")
+            plt.xlabel("Count")
+            plt.ylabel(col1)
+
+        elif analysis_type == "Pairplot":
+            sns.pairplot(df.select_dtypes(include="number"))
+            plt.suptitle("Pairplot of Numeric Columns", y=1.02)
+
+        elif analysis_type == "Summary Statistics":
+            stats = df.describe().T
+            insights_text.delete(1.0, tk.END)
+            insights_text.insert(tk.END, stats.to_string())
+            plt.clf()
+            plt.axis('off')
+
         else:
             status_label.config(text="Select valid options.")
             return
-
+        plt.tight_layout()
         display_plot()
         generate_insights()
 
     except Exception as e:
         status_label.config(text=f"Error: {e}")
+        messagebox.showerror("Analysis Error", str(e))
 
 # --- Display Plot ---
 def display_plot():
@@ -162,6 +318,18 @@ def display_plot():
     canvas = FigureCanvasTkAgg(fig, master=graph_frame)
     canvas.draw()
     canvas.get_tk_widget().pack(fill='both', expand=True)
+
+# --- Responsive Layout ---
+# def on_resize(event=None):
+#     width = root.winfo_width()
+#     height = root.winfo_height()
+#     # Adjust column widths in table preview
+#     if df is not None and len(df.columns) > 0:
+#         col_width = max(80, int((table_frame.winfo_width() - 40) / len(df.columns)))
+#         for col in df.columns:
+#             tree.column(col, width=col_width)
+
+# root.bind('<Configure>', on_resize)
 
 # --- UI Components ---
 title_label = tb.Label(root, text="📘 Teacher Dashboard", font=("Helvetica", 18, "bold"))
@@ -180,7 +348,8 @@ control_frame.pack(side='left', fill='y', padx=10, pady=5)
 
 ttk.Label(control_frame, text="Select Analysis Type:").pack(pady=5)
 analysis_menu = ttk.Combobox(control_frame, textvariable=selected_analysis, values=[
-    "Select", "Frequency Analysis", "Correlation Matrix", "Marks Summary", "Custom Comparison", "Trend Analysis"
+    "Select", "Frequency Analysis", "Correlation Matrix", "Marks Summary", "Custom Comparison", "Trend Analysis",
+    "distribution", "boxplot - outliers", "Top N Categories", "Pairplot", "Summary Statistics"
 ])
 analysis_menu.pack(pady=5)
 
@@ -195,27 +364,76 @@ column_selector2.pack(pady=5)
 generate_btn = tb.Button(control_frame, text="Generate Graph", bootstyle="info", command=generate_analysis)
 generate_btn.pack(pady=10)
 
+export_btn = tb.Button(control_frame, text="Export Graph", bootstyle="warning", command=export_graph)
+export_btn.pack(pady=5)
+
+filter_label = ttk.Label(control_frame, text="Filter/Search:")
+filter_label.pack(pady=5)
+filter_entry = ttk.Entry(control_frame)
+filter_entry.pack(pady=5)
+filter_btn = tb.Button(control_frame, text="Apply Filter", bootstyle="primary", command=filter_table)
+filter_btn.pack(pady=5)
+
+missing_data_btn = tb.Button(control_frame, text="Plot Missing Data", bootstyle="danger", command=plot_missing_data)
+missing_data_btn.pack(pady=5)
+
+drop_duplicates_btn = tb.Button(control_frame, text="Drop Duplicates & Nulls", bootstyle="danger", command=drop_duplicates)
+drop_duplicates_btn.pack(pady=5)
+export_insights_btn = tb.Button(control_frame, text="Download Insights", bootstyle="success", command=export_insights)
+export_insights_btn.pack(pady=5)
+
 status_label = tb.Label(control_frame, text="No file loaded", bootstyle="secondary")
 status_label.pack(pady=10)
+
+# Graph Section
+graph_frame = tb.LabelFrame(main_frame, text="📈 Data Visualization", padding=20)
+graph_frame.pack(fill='both', expand=True, padx=10, pady=10)
+
+tb.Label(graph_frame, text="Graphs will appear here", bootstyle="secondary").pack(pady=20)
 
 # Center Table
 table_frame = tb.LabelFrame(main_frame, text="📋 Data Preview (Top 10 Rows)", padding=10)
 table_frame.pack(side='left', fill='both', expand=True, padx=10)
 
-tree = ttk.Treeview(table_frame, show='headings')
+# Add a horizontal scrollbar
+tree_scroll_x = ttk.Scrollbar(table_frame, orient="horizontal")
+tree_scroll_x.pack(side='bottom', fill='x')
+
+# Add a vertical scrollbar
+tree_scroll_y = ttk.Scrollbar(table_frame, orient="vertical")
+tree_scroll_y.pack(side='right', fill='y')
+
+tree = ttk.Treeview(
+    table_frame,
+    show='headings',
+    xscrollcommand=tree_scroll_x.set,
+    yscrollcommand=tree_scroll_y.set
+)
 tree.pack(fill='both', expand=True)
+tree_scroll_x.config(command=tree.xview)
+tree_scroll_y.config(command=tree.yview)
 
 # Right Smart Insights
 insights_frame = tb.LabelFrame(main_frame, text="💡 Smart Insights", padding=10)
-insights_frame.pack(side='right', fill='y', padx=10, pady=5)
+insights_frame.pack(side='right', fill='both', expand=True, padx=10, pady=5)
 
 insights_text = tk.Text(insights_frame, height=25, wrap='word', bg="#2a2a2a", fg="white", relief="flat")
 insights_text.pack(fill='both', expand=True)
 
-# Graph Section
-graph_frame = tb.LabelFrame(root, text="📈 Data Visualization", padding=10)
-graph_frame.pack(fill='both', expand=True, padx=10, pady=10)
 
-tb.Label(graph_frame, text="Graphs will appear here", bootstyle="secondary").pack(pady=20)
+
+def on_analysis_change(event=None):
+    analysis = selected_analysis.get()
+    if analysis in ["Correlation Matrix", "Marks Summary"]:
+        column_selector1.config(state="disabled")
+        column_selector2.config(state="disabled")
+    elif analysis == "Custom Comparison":
+        column_selector1.config(state="readonly")
+        column_selector2.config(state="readonly")
+    else:
+        column_selector1.config(state="readonly")
+        column_selector2.config(state="disabled")
+
+analysis_menu.bind("<<ComboboxSelected>>", on_analysis_change)
 
 root.mainloop()
