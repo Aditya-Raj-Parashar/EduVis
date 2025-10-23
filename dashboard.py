@@ -16,7 +16,7 @@ def export_graph():
     except Exception as e:
         messagebox.showerror("Export Error", str(e))
 
-# --- Filter/Search Data ---
+# ---- Filter/Search Data ----
 def filter_table():
     query = filter_entry.get().lower()
     for i in tree.get_children():
@@ -26,7 +26,7 @@ def filter_table():
         for _, row in filtered.head(10).iterrows():
             tree.insert("", "end", values=list(row))
 
-# --- Missing Data Visualization ---
+# ----- Missing Data Visualization ---
 def plot_missing_data():
     if df is not None:
         plt.clf()
@@ -40,6 +40,12 @@ def plot_missing_data():
             display_plot()
         else:
             status_label.config(text="No missing data to display.")
+            plt.clf()
+            plt.bar(["No Missing Data"], [0], color="green")
+            plt.title("All missing and duplicate data removed! <3")
+            plt.ylabel("Missing Values")
+            plt.tight_layout()
+            display_plot()
 
 # --- Download Insights ---
 def export_insights():
@@ -56,8 +62,8 @@ def drop_duplicates():
     global df
     if df is not None:
         before = len(df)
-        df = df.drop_duplicates()
-        df = df.dropna()
+        df = df.drop_duplicates(inplace=True)
+        df = df.dropna(inplace=True)
         after = len(df)
         update_table()
         generate_insights()
