@@ -149,28 +149,28 @@ def generate_insights():
         return
 
     insights_text.delete(1.0, tk.END)
-    insights_text.insert(tk.END, "📊 SMART INSIGHTS\n\n")
+    insights_text.insert(tk.END, "📊 Here are some smart insights from your data! <3\n\n")
 
     try:
         # General Info
-        insights_text.insert(tk.END, f"Total Records: {len(df)}\n")
-        insights_text.insert(tk.END, f"Total Columns: {len(df.columns)}\n")
+        insights_text.insert(tk.END, f"Your dataset has {len(df)} records and {len(df.columns)} columns. o.o\n\n")
 
         # Data types
         dtypes = df.dtypes.astype(str)
-        insights_text.insert(tk.END, f"\nColumn Data Types:\n")
+        insights_text.insert(tk.END, f"Let's look at the data types for each column: 8-]\n")
         for col, dtype in dtypes.items():
             insights_text.insert(tk.END, f"- {col}: {dtype}\n")
+        insights_text.insert(tk.END, "\n")
 
         # Columns with missing values
         missing_cols = df.columns[df.isnull().any()].tolist()
         if missing_cols:
-            insights_text.insert(tk.END, f"\nColumns with Missing Values: {', '.join(missing_cols)}\n")
+            insights_text.insert(tk.END, f"Some columns have missing values: {', '.join(missing_cols)}. Please check below! :o\n")
             for col in missing_cols:
                 count = df[col].isnull().sum()
-                insights_text.insert(tk.END, f"  - {col}: {count} missing\n")
+                insights_text.insert(tk.END, f"  - {col}: {count} missing values\n")
         else:
-            insights_text.insert(tk.END, "\nNo columns with missing values.\n")
+            insights_text.insert(tk.END, "Awesome! No columns have missing values. ^_^\n\n")
 
         # Columns with duplicates
         duplicate_cols = []
@@ -178,30 +178,30 @@ def generate_insights():
             if df[col].duplicated().any():
                 duplicate_cols.append(col)
         if duplicate_cols:
-            insights_text.insert(tk.END, f"\nColumns with Duplicates: {', '.join(duplicate_cols)}\n")
+            insights_text.insert(tk.END, f"Heads up! These columns have duplicate values: {', '.join(duplicate_cols)}. 0_0\n")
             for col in duplicate_cols:
                 count = df[col].duplicated().sum()
                 insights_text.insert(tk.END, f"  - {col}: {count} duplicates\n")
         else:
-            insights_text.insert(tk.END, "\nNo columns with duplicate values.\n")
+            insights_text.insert(tk.END, "No duplicate values found in any column. Nice! :)\n\n")
 
         # Detect numeric columns
         numeric_cols = df.select_dtypes(include="number").columns.tolist()
         if numeric_cols:
-            insights_text.insert(tk.END, f"\nNumeric Columns: {', '.join(numeric_cols)}\n")
+            insights_text.insert(tk.END, f"Numeric columns detected: {', '.join(numeric_cols)}. Let's crunch some numbers! 8-]\n\n")
 
             # Basic stats
             summary = df[numeric_cols].describe().T
             top_mark_col = summary['mean'].idxmax()
             low_mark_col = summary['mean'].idxmin()
 
-            insights_text.insert(tk.END, f"\nHighest Avg: {top_mark_col} ({summary.loc[top_mark_col, 'mean']:.2f})\n")
-            insights_text.insert(tk.END, f"Lowest Avg: {low_mark_col} ({summary.loc[low_mark_col, 'mean']:.2f})\n")
+            insights_text.insert(tk.END, f"Column with the highest average: {top_mark_col} ({summary.loc[top_mark_col, 'mean']:.2f}) <3\n")
+            insights_text.insert(tk.END, f"Column with the lowest average: {low_mark_col} ({summary.loc[low_mark_col, 'mean']:.2f}) o.o\n\n")
 
             # Missing data
             missing = df.isnull().sum().sum()
             if missing > 0:
-                insights_text.insert(tk.END, f"\n⚠️ Missing Values: {missing}\n")
+                insights_text.insert(tk.END, f"There are {missing} missing values in total. Please review! :o\n\n")
 
             # Correlation check
             if len(numeric_cols) >= 2:
@@ -209,29 +209,29 @@ def generate_insights():
                 strongest = corr.unstack().sort_values(ascending=False)
                 first_pair = strongest[strongest < 1].idxmax()
                 corr_val = corr.loc[first_pair[0], first_pair[1]]
-                insights_text.insert(tk.END, f"\n🔗 Strongest Correlation: {first_pair[0]} ↔ {first_pair[1]} ({corr_val:.2f})\n")
+                insights_text.insert(tk.END, f"The strongest correlation is between {first_pair[0]} and {first_pair[1]} ({corr_val:.2f}). Interesting! ^_^\n\n")
 
         # Attendance specific
         attendance_cols = [col for col in df.columns if "attend" in col.lower()]
         if attendance_cols:
             col = attendance_cols[0]
             avg_att = df[col].mean()
-            insights_text.insert(tk.END, f"\n🧮 Average Attendance: {avg_att:.2f}%\n")
+            insights_text.insert(tk.END, f"Average attendance in '{col}' is {avg_att:.2f}%. Keep it up! :D\n\n")
 
         # Marks specific
         marks_cols = [col for col in df.columns if "mark" in col.lower() or "score" in col.lower()]
         if marks_cols:
             col = marks_cols[0]
             top_student = df.loc[df[col].idxmax(), df.columns[0]]
-            insights_text.insert(tk.END, f"🏅 Top Scorer: {top_student} ({df[col].max()})\n")
+            insights_text.insert(tk.END, f"The top scorer in '{col}' is {top_student} with a score of {df[col].max()}! 8-]\n\n")
 
     except Exception as e:
-        insights_text.insert(tk.END, f"\nError generating insights: {e}")
+        insights_text.insert(tk.END, f"Dekh ab kya gad bad kar di : {e} :(")
 
-# --- Generate Graphs ---
+# ----- Generate Graphs ----
 def generate_analysis():
     if df is None:
-        status_label.config(text="Please upload a CSV file first!")
+        status_label.config(text="Yaar file to daal de 😭!")
         return
 
     analysis_type = selected_analysis.get()
@@ -239,7 +239,7 @@ def generate_analysis():
     plt.clf()
 
     if analysis_type == "Select":
-        status_label.config(text="Please select an analysis type.")
+        status_label.config(text="Bhoot ka analysis karega? ")
         return
 
     try:
@@ -281,7 +281,13 @@ def generate_analysis():
             plt.xlabel(col1)
 
         elif analysis_type == "Top N Categories" and col1 != "Select":
-            n=10
+            n=10 #
+            try:
+                n_str = tk.simpledialog.askstring("Top N", "Enter the value of N (number of top categories to show):", parent=root)
+                if n_str is not None and n_str.isdigit() and int(n_str) > 0:
+                    n = int(n_str)
+            except Exception as e:
+                messagebox.showwarning("Input Error", f"Aukaat ke bahar ka N mat daaal warna.\n hello papa yaar system ki to ma.... \n Ab default N=10 use kar rha hu\n ye tera error : {e}")
             top_n = df[col1].value_counts().head(n)
             sns.barplot(x=top_n.values, y=top_n.index, palette="crest")
             plt.title(f"Top {n} Categories in {col1}")
@@ -290,7 +296,7 @@ def generate_analysis():
 
         elif analysis_type == "Pairplot":
             sns.pairplot(df.select_dtypes(include="number"))
-            plt.suptitle("Pairplot of Numeric Columns", y=1.02)
+            plt.suptitle("Pairplot of Numeric Columns", y=1.02, x=1.02)
 
         elif analysis_type == "Summary Statistics":
             stats = df.describe().T
@@ -300,7 +306,7 @@ def generate_analysis():
             plt.axis('off')
 
         else:
-            status_label.config(text="Select valid options.")
+            status_label.config(text="Mamma will be not so proud of you!!!! 😔")
             return
         plt.tight_layout()
         display_plot()
@@ -308,9 +314,9 @@ def generate_analysis():
 
     except Exception as e:
         status_label.config(text=f"Error: {e}")
-        messagebox.showerror("Analysis Error", str(e))
+        messagebox.showerror("Dekh orr samajh kaha haga h. Maybe dataset me issue ho", str(e))
 
-# --- Display Plot ---
+# ---- Display Plot -----
 def display_plot():
     for widget in graph_frame.winfo_children():
         widget.destroy()
@@ -331,6 +337,12 @@ def display_plot():
 
 # root.bind('<Configure>', on_resize)
 
+# gaand maraye Responsiveness
+# mkb mujhe nhi karna yeeeeee....
+
+
+
+
 # --- UI Components ---
 title_label = tb.Label(root, text="📘 Teacher Dashboard", font=("Helvetica", 18, "bold"))
 title_label.pack(pady=10)
@@ -338,7 +350,7 @@ title_label.pack(pady=10)
 upload_btn = tb.Button(root, text="Upload CSV File", bootstyle="success", command=upload_file)
 upload_btn.pack(pady=5)
 
-# --- Main layout ---
+# --- All buttons and Fucking peice of SHITT.......... ---
 main_frame = tb.Frame(root)
 main_frame.pack(fill='both', expand=True, padx=10, pady=10)
 
@@ -392,8 +404,8 @@ graph_frame.pack(fill='both', expand=True, padx=10, pady=10)
 tb.Label(graph_frame, text="Graphs will appear here", bootstyle="secondary").pack(pady=20)
 
 # Center Table
-table_frame = tb.LabelFrame(main_frame, text="📋 Data Preview (Top 10 Rows)", padding=10)
-table_frame.pack(side='left', fill='both', expand=True, padx=10)
+table_frame = tb.LabelFrame(main_frame, text="Data Preview ", padding=10)
+table_frame.pack(side='left', fill='both' , expand=True, padx=10)
 
 # Add a horizontal scrollbar
 tree_scroll_x = ttk.Scrollbar(table_frame, orient="horizontal")
@@ -424,16 +436,25 @@ insights_text.pack(fill='both', expand=True)
 
 def on_analysis_change(event=None):
     analysis = selected_analysis.get()
-    if analysis in ["Correlation Matrix", "Marks Summary"]:
+    if analysis in ["Correlation Matrix", "Marks Summary",'pairplot']:
         column_selector1.config(state="disabled")
         column_selector2.config(state="disabled")
-    elif analysis == "Custom Comparison":
+    elif analysis in ["Custom Comparison","Trend Analysis","distribution", "Top N Categories", "Summary Statistics"]:
         column_selector1.config(state="readonly")
         column_selector2.config(state="readonly")
     else:
         column_selector1.config(state="readonly")
         column_selector2.config(state="disabled")
-
+# "Custom Comparison", "Trend Analysis",
+    #"distribution", "boxplot - outliers", "Top N Categories", "Pairplot", "Summary Statistics"
 analysis_menu.bind("<<ComboboxSelected>>", on_analysis_change)
 
 root.mainloop()
+
+
+
+
+
+
+#Faaaaaaaaaaaaaakkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk
+#iske baad mai tkinter ka project kabhi nhi karunga
