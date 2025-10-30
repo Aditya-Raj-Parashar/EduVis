@@ -16,6 +16,7 @@ def export_graph():
     except Exception as e:
         messagebox.showerror("Export Error", str(e))
 
+
 # ---- Filter/Search Data ----
 def filter_table():
     query = filter_entry.get().lower()
@@ -62,11 +63,18 @@ def drop_duplicates():
     global df
     if df is not None:
         before = len(df)
-        df = df.drop_duplicates(inplace=True)
-        df = df.dropna(inplace=True)
+        df = df.drop_duplicates()
+        df = df.dropna()
         after = len(df)
-        update_table()
+        update_table()  # Update the table preview after dropping
         generate_insights()
+        # Plot a flat graph to show no missing data
+        plt.clf()
+        plt.bar(["No Missing Data"], [0], color="green")
+        plt.title("All missing and duplicate data removed! <3")
+        plt.ylabel("Missing Values")
+        plt.tight_layout()
+        display_plot()
         messagebox.showinfo(
             "Rows Removed",
             f"All duplicate and null rows have been dropped.\nRows before: {before}\nRows after: {after}"
