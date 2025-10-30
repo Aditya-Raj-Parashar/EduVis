@@ -75,6 +75,7 @@ def drop_duplicates():
         plt.ylabel("Missing Values")
         plt.tight_layout()
         display_plot()
+        update_table()
         messagebox.showinfo(
             "Rows Removed",
             f"All duplicate and null rows have been dropped.\nRows before: {before}\nRows after: {after}"
